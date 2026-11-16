@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>校园静音仓预约平台</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f5f7fa; color: #333; line-height: 1.5; }
+        .header { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 35px 20px 40px; text-align: center; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; }
+        .header p { font-size: 0.8rem; opacity: 0.9; }
+        .action-card { background: white; margin: -25px 15px 15px; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; position: relative; z-index: 10; }
+        .scan-btn { background: #007aff; color: white; border: none; padding: 12px 30px; border-radius: 25px; font-size: 1rem; width: 100%; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        .scan-btn:active { background: #0056b3; }
+        .section-title { padding: 10px 15px; font-weight: bold; color: #555; font-size: 0.9rem; }
+        .pod-list { padding: 0 15px 20px; }
+        .pod-item { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.02); cursor: pointer; }
+        .pod-info h3 { font-size: 1rem; margin-bottom: 4px; }
+        .pod-info p { font-size: 0.8rem; color: #888; }
+        .status { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap; }
+        .status.free { background: #e6f7ff; color: #1890ff; }
+        .status.busy { background: #fff1f0; color: #f5222d; }
+        .status.maintenance { background: #f5f5f5; color: #8c8c8c; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: flex-end; }
+        .modal-content { background: white; width: 100%; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 25px; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 0.9rem; margin-bottom: 8px; color: #666; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; outline: none; }
+        .form-group input:focus { border-color: #007aff; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+        .btn-cancel { background: #f0f0f0; color: #666; }
+        .btn-confirm { background: #007aff; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>校园静音仓</h1>
+        <p>专注面试 / 背书 / 私密通话</p>
+    </div>
+    <div class="action-card">
+        <button class="scan-btn" onclick="openModal('A01')">扫码开门 / 预约</button>
+        <p style="font-size: 0.75rem; color: #999; margin-top: 10px;">当前余额：¥ 5.00</p>
+    </div>
+    <div class="section-title">图书馆区域实时状态</div>
+    <div class="pod-list" id="podList"></div>
+    <div class="modal-overlay" id="bookingModal">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 20px; font-size: 1.1rem;">预约 <span id="modalPodId" style="color:#007aff"></span> 号舱</h2>
+            <div class="form-group">
+                <label>使用时长</label>
+                <select id="duration">
+                    <option value="30">30分钟 (¥ 0.5)</option>
+                    <option value="60" selected>60分钟 (¥ 1.0)</option>
+                    <option value="90">90分钟 (¥ 1.5)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>用途备注</label>
+                <input type="text" placeholder="例如：考研复试模拟">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="btn btn-confirm" onclick="confirmBooking()">立即预约</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const pods = [
+            { id: 'A01', location: '图书馆一楼大厅', status: 'free', desc: '配备电源与Wi-Fi' },
+            { id: 'A02', location: '图书馆二楼走廊', status: 'busy', desc: '使用中，预计剩余 15分钟' },
+            { id: 'B01', location: '教学楼 A座 连廊', status: 'free', desc: '全新升级通风系统' },
+            { id: 'B02', location: '教学楼 A座 连廊', status: 'maintenance', desc: '设备维护中' }
+        ];
+        function renderPods() {
+            const list = document.getElementById('podList');
+            if (!list) return;
+            let html = '';
+            pods.forEach(pod => {
+                let statusText = '', statusClass = '';
+                if (pod.status === 'free') { statusText = '空闲'; statusClass = 'free'; }
+                else if (pod.status === 'busy') { statusText = '使用中'; statusClass = 'busy'; }
+                else { statusText = '维护中'; statusClass = 'maintenance'; }
+                html += '<div class="pod-item" onclick="openModal(\'' + pod.id + '\')">' +
+                        '<div class="pod-info"><h3>' + pod.location + ' - ' + pod.id + '号</h3>' +
+                        '<p>' + pod.desc + '</p></div>' +
+                        '<span class="status ' + statusClass + '">' + statusText + '</span></div>';
+            });
+            list.innerHTML = html;
+        }
+        function openModal(id) {
+            document.getElementById('modalPodId').innerText = id;
+            document.getElementById('bookingModal').style.display = 'flex';
+        }
+        function closeModal() {
+            document.getElementById('bookingModal').style.display = 'none';
+        }
+        function confirmBooking() {
+            const id = document.getElementById('modalPodId').innerText;
+            const duration = document.getElementById('duration').value;
+            alert('预约成功！\n舱位：' + id + '号\n时长：' + duration + '分钟\n请前往舱位扫码开门。');
+            closeModal();
+        }
+        window.onload = function() { renderPods(); };
+    </script>
+</body>
+</html>
